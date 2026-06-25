@@ -1,5 +1,5 @@
-import os, sys
-sys.path.insert(0, os.path.dirname(__file__))
+import os
+import importlib.util
 from fastapi import FastAPI, Request, Form, Cookie
 from fastapi.responses import HTMLResponse, RedirectResponse
 from telegram import Update, Bot
@@ -7,11 +7,11 @@ from telegram import Update, Bot
 TOKEN = os.environ.get("TOKEN")
 app = FastAPI()
 
-# ──────────────────────────────────────────────
-# EXTEND HERE — add features in api/features/
-#   features/commands.py  →  handle_update()
-# ──────────────────────────────────────────────
-from features import handle_update
+_features_path = os.path.join(os.path.dirname(__file__), "features", "__init__.py")
+_spec = importlib.util.spec_from_file_location("features", _features_path)
+_mod = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(_mod)
+handle_update = _mod.handle_update
 
 # App modules
 from database import init_db
