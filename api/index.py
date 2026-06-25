@@ -1,6 +1,6 @@
 import os
-from fastapi import FastAPI, Request
-from fastapi.responses import HTMLResponse
+from fastapi import FastAPI, Request, Form, Cookie
+from fastapi.responses import HTMLResponse, RedirectResponse
 from telegram import Update, Bot
 
 TOKEN = os.environ.get("TOKEN")
@@ -11,6 +11,16 @@ app = FastAPI()
 #   features/commands.py  →  handle_update()
 # ──────────────────────────────────────────────
 from features import handle_update
+
+# App modules
+from database import init_db
+from auth import create_user, authenticate_user, create_session_token, get_user_by_token, delete_session
+from web.templates import landing_page, signup_page, login_page, dashboard_page
+
+
+@app.on_event("startup")
+def on_startup():
+    init_db()
 
 
 @app.post("/webhook")
@@ -25,9 +35,68 @@ async def webhook(request: Request):
     return {"message": "ok"}
 
 
-@app.get("/")
+@app.get("/", response_class=HTMLResponse)
 def index():
-    return {"message": "ok"}
+    return landing_page()
+
+
+@app.get("/signup", response_class=HTMLResponse)
+def signup_get():
+    return signup_page()
+
+
+@app.post("/signup")
+async def signup_post(
+    full_name: str = Form(...),
+    email: str = Form(...),
+    phone: str = Form(...),
+    password: str = Form(...),
+):
+    user = create_user(full_name, email, phone, password)
+    if not user:
+        return signup_page(error="An account with this email already exists.")
+    token = create_session_token(user.id)
+    resp = RedirectResponse(url="/dashboard", status_code=303)
+    resp.set_cookie(key="session", value=token, httponly=True, max_age=86400 * 7)
+    return resp
+
+
+@app.get("/login", response_class=HTMLResponse)
+def login_get():
+    return login_page()
+
+
+@app.post("/login")
+async def login_post(
+    email: str = Form(...),
+    password: str = Form(...),
+):
+    user = authenticate_user(email, password)
+    if not user:
+        return login_page(error="Invalid email or password.")
+    token = create_session_token(user.id)
+    resp = RedirectResponse(url="/dashboard", status_code=303)
+    resp.set_cookie(key="session", value=token, httponly=True, max_age=86400 * 7)
+    return resp
+
+
+@app.get("/dashboard", response_class=HTMLResponse)
+def dashboard(session: str = Cookie(default=None)):
+    if not session:
+        return RedirectResponse(url="/login")
+    user = get_user_by_token(session)
+    if not user:
+        return RedirectResponse(url="/login")
+    return dashboard_page(user)
+
+
+@app.get("/logout")
+def logout(session: str = Cookie(default=None)):
+    if session:
+        delete_session(session)
+    resp = RedirectResponse(url="/")
+    resp.delete_cookie("session")
+    return resp
 
 
 @app.post("/api/test-webhook")
@@ -59,8 +128,8 @@ async def get_trace():
         return {"using_old_code": None}
 
 
-@app.get("/dashboard", response_class=HTMLResponse)
-async def dashboard():
+@app.get("/bot-dashboard", response_class=HTMLResponse)
+async def bot_dashboard():
     errors = []
     me = None
     webhook_info = None
