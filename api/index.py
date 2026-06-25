@@ -1,15 +1,5 @@
 import os, sys
-_api_dir = os.path.join(os.path.dirname(__file__))
-sys.path.insert(0, _api_dir)
-
-print("=== TRACE: sys.path ===", file=sys.stderr)
-for p in sys.path:
-    print(f"  {p}", file=sys.stderr)
-print(f"=== TRACE: _api_dir={_api_dir} ===", file=sys.stderr)
-print(f"=== TRACE: features exists: {os.path.isdir(os.path.join(_api_dir, 'features'))} ===", file=sys.stderr)
-print(f"=== TRACE: features/__init__.py exists: {os.path.isfile(os.path.join(_api_dir, 'features', '__init__.py'))} ===", file=sys.stderr)
-print(f"=== TRACE: features/commands.py exists: {os.path.isfile(os.path.join(_api_dir, 'features', 'commands.py'))} ===", file=sys.stderr)
-
+sys.path.insert(0, os.path.join(os.path.dirname(__file__)))
 from fastapi import FastAPI, Request, Form, Cookie
 from fastapi.responses import HTMLResponse, RedirectResponse
 from telegram import Update, Bot
@@ -17,18 +7,7 @@ from telegram import Update, Bot
 TOKEN = os.environ.get("TOKEN")
 app = FastAPI()
 
-try:
-    from features import handle_update
-except ModuleNotFoundError as e:
-    print(f"=== TRACE ERROR: {e} ===", file=sys.stderr)
-    import importlib.util
-    _fp = os.path.join(_api_dir, "features", "commands.py")
-    print(f"=== TRACE: attempting direct load from {_fp} ===", file=sys.stderr)
-    _spec = importlib.util.spec_from_file_location("features.commands", _fp)
-    _mod = importlib.util.module_from_spec(_spec)
-    _spec.loader.exec_module(_mod)
-    handle_update = _mod.handle_update
-    print("=== TRACE: direct load succeeded ===", file=sys.stderr)
+from features import handle_update
 
 # App modules
 from database import init_db
